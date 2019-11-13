@@ -2,29 +2,106 @@
 // babel
 /* global dom log */
 
-class Keyboard {
-	constructor(options = { keyDownLimit: 1, layout: 'simple' }){
-		this.elem = dom.createElem('div', { className: 'keyboard disappear', onPointerDown: this.onPointerDown.bind(this), onPointerUp: this.onPointerUp.bind(this) });
+class SoftKeyboard extends HTMLElement {
+	constructor(){
+		super();
 
 		this.events = {};
 		this.pointerEvents = {};
 		this.keys = {};
 		this.keyRows = [];
-		this.options = options;
 
-		if(typeof options.keyDefinitions === 'object') this.keyDefinitions = Object.assign(this.keyDefinitions, options.keyDefinitions);
-		if(typeof options.layouts === 'object') this.layouts = Object.assign(this.layouts, options.layouts);
-
-		this.fix = this.fix.bind(this);
-
-		this.setupLayout(options.layout);
-
-		dom.maintenance.init([this.fix]);
+		this.layouts = Object.assign({}, SoftKeyboard.layouts);
+		this.setLayouts = Object.assign({}, SoftKeyboard.setLayouts);
+		this.keyDefinitions = Object.assign({}, SoftKeyboard.keyDefinitions);
+		this.setKeyDefinitions = Object.assign({}, SoftKeyboard.setKeyDefinitions);
 
 		return this;
 	}
 
-	setupKey(key){
+	static get observedAttributes(){
+    return ['hidden', 'layout'];
+	}
+
+	static keyDefinitions = {
+		simple: { key: 'simple', text: 'ABC' },
+		number: { key: 'number', text: '123' }
+	}
+
+	static layouts = {
+		simple: [
+			['simple', 'number'],
+			['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
+			['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
+			['shift', 'z', 'x', 'c', 'v', 'b', 'n', 'm', 'backspace'],
+			[',', '.', 'space', '!', 'return'],
+		],
+		number: [
+			['simple', 'number'],
+			['1', '2', '3', 'backspace'],
+			['4', '5', '6', 'clear'],
+			['7', '8', '9', 'done'],
+			['.', '0', '-', 'e'],
+		]
+	}
+
+	static setKeyDefinitions = (keyDefinitions) => {
+		this.keyDefinitions = Object.assign(this.keyDefinitions, keyDefinitions);
+	}
+
+	static setLayouts = (layouts) => {
+		this.layouts = Object.assign(this.layouts, layouts);
+	}
+
+	on = (name, func) => { // todo implement native keyboard events https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/KeyboardEvent
+		this.addEventListener(name, func);
+
+		return { cancel: (name, func) => { this.off(name, func); } };
+	}
+
+	off = (name, func) => {
+		this.removeEventListener(name, func);
+	}
+
+	fire = (name, data) => {
+		this.dispatchEvent(new CustomEvent(name, { detail: data }));
+	}
+
+	fix = (name = this.layout) => {
+		var layout = this.layouts[name];
+
+		if(!name || !layout) return;
+
+		for(var x = 0, xCount = layout.length; x < xCount; ++x){
+			for(var y = 0, yCount = layout[x].length; y < yCount; ++y){
+				if(this.keys[`${x}_${y}`]) this.keys[`${x}_${y}`].elem.style.width = ((this.clientWidth / yCount) - (y + 1 === yCount ? 0 : 1)) +'px';
+			}
+		}
+	}
+
+	connectedCallback(){
+		this.setLayout(this.layout);
+
+		dom.maintenance.init([this.fix]);
+
+		dom.onPointerDown(this, this.onPointerDown);
+		dom.onPointerUp(this, this.onPointerUp);
+	}
+
+	disconnectedCallback(){
+		this.pointerDownOff();
+		this.pointerUpOff();
+	}
+
+	attributeChangedCallback(attribute, oldVal, newVal){
+		log()('[SoftKeyboard] attributeChangedCallback', attribute, oldVal, newVal);
+
+		if(attribute === 'layout') this.setLayout(newVal);
+
+		else if(attribute === 'hidden') this[newVal ? 'hide' : 'show']();
+	}
+
+	generateKey(key){
 		if(typeof key !== 'string') return;
 
 		var elem = dom.createElem('button');
@@ -53,29 +130,29 @@ class Keyboard {
 		return key;
 	}
 
-	setupLayout(layout){
-		if(typeof layout !== 'string' || !this.layouts[layout]) return;
+	flushKeyup = () => {
+		Object.keys(this.pointerEvents).forEach((id) => { this.onPointerUp(this.pointerEvents[id]); });
+	}
 
-		this.layoutName = layout;
+	setLayout(name){
+		if(typeof name !== 'string' || !this.layouts[name]) return;
 
-		this.elem.className = `keyboard ${layout}`;
+		this.layout = name;
 
-		layout = this.layouts[layout];
+		var layout = this.layouts[name];
 
-		this.layout = layout;
-
-		dom.empty(this.elem);
+		dom.empty(this); // todo re-use elements remove extra, add as-needed
 
 		this.keyRows = [];
 		this.keys = {};
 
 		for(var x = 0, xCount = Math.max(layout.length, this.keyRows.length); x < xCount; ++x){
-			this.keyRows[x] = this.keyRows[x] || dom.createElem('div', { appendTo: this.elem });
+			this.keyRows[x] = this.keyRows[x] || dom.createElem('div', { appendTo: this });
 
 			for(var y = 0, yCount = Math.max(layout[x] && layout[x].length, this.keyRows[x].children.length); y < yCount; ++y){
 				var position = `${x}_${y}`;
 
-				var key = this.setupKey(layout[x][y]);
+				var key = this.generateKey(layout[x][y]);
 
 				key.elem.setAttribute('data-pos', position);
 
@@ -85,17 +162,9 @@ class Keyboard {
 			}
 		}
 
-		this.show();
+		if(this.hidden) this.show();
 
-		this.fix();
-	}
-
-	fix(){
-		for(var x = 0, xCount = this.layout.length; x < xCount; ++x){
-			for(var y = 0, yCount = this.layout[x].length; y < yCount; ++y){
-				if(this.keys[`${x}_${y}`]) this.keys[`${x}_${y}`].elem.style.width = ((this.elem.clientWidth / yCount) - (y + 1 === yCount ? 0 : 1)) +'px';
-			}
-		}
+		else this.fix();
 	}
 
 	onPointerDown(evt){
@@ -117,15 +186,9 @@ class Keyboard {
 
 		this.fire('keyDown', evt);
 
-		clearTimeout(this.keyupTimeout);
+		// clearTimeout(this.keyupTimeout);
 
 		// this.keyupTimeout = setTimeout(this.flushKeyup.bind(this), (this.options.keyDownLimit) * 1000);
-	}
-
-	flushKeyup(){
-		Object.keys(this.pointerEvents).forEach((id) => {
-			this.onPointerUp(this.pointerEvents[id]);
-		});
 	}
 
 	onPointerUp(evt){
@@ -153,41 +216,12 @@ class Keyboard {
 	}
 
 	show(){
-		dom.show(this.elem, '', this.fix);
+		dom.show(this, '', this.fix);
 	}
 
 	hide(){
-		dom.disappear(this.elem);
-	}
-
-	on(name, func){
-		this.events[name] = this.events[name] || [];
-
-		this.events[name].push(func);
-	}
-
-	fire(name, data){
-		if(!this.events[name]) return log.warn(2)(`[Keyboard] No listeners for ${name}`);
-
-		for(var x = this.events[name].length - 1; x >= 0; --x) this.events[name][x].call(this, data);
+		dom.disappear(this);
 	}
 }
 
-Keyboard.prototype.keyDefinitions = {
-	simple: { key: 'simple', text: 'ABC' }
-};
-
-Keyboard.prototype.layouts = {
-	simple: [
-		['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
-		['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
-		['shift', 'z', 'x', 'c', 'v', 'b', 'n', 'm', 'backspace'],
-		['space', 'return'],
-	],
-	numberInput: [
-		['1', '2', '3', 'backspace'],
-		['4', '5', '6', 'clear'],
-		['7', '8', '9', 'done'],
-		['.', '0', '-', 'e'],
-	]
-};
+window.customElements.define('soft-keyboard', SoftKeyboard);
