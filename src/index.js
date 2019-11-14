@@ -20,7 +20,7 @@ class SoftKeyboard extends HTMLElement {
 	}
 
 	static get observedAttributes(){
-    return ['hidden', 'layout'];
+		return ['hidden', 'layout'];
 	}
 
 	static keyDefinitions = {
