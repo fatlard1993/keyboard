@@ -51,8 +51,6 @@ class SoftKeyboard extends HTMLElement {
 		this.layouts = Object.assign(this.layouts, layouts);
 	}
 
-	static log = new Log({ tag: 'keyboard' });
-
 	on = (name, func) => { // todo implement native keyboard events https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/KeyboardEvent
 		this.addEventListener(name, func);
 
