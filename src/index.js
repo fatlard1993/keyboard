@@ -1,6 +1,4 @@
-// includes dom log
-// babel
-/* global dom log */
+import dom from 'dom';
 
 class SoftKeyboard extends HTMLElement {
 	constructor(){
@@ -53,6 +51,8 @@ class SoftKeyboard extends HTMLElement {
 		this.layouts = Object.assign(this.layouts, layouts);
 	}
 
+	static log = new Log({ tag: 'keyboard' });
+
 	on = (name, func) => { // todo implement native keyboard events https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/KeyboardEvent
 		this.addEventListener(name, func);
 
@@ -94,8 +94,6 @@ class SoftKeyboard extends HTMLElement {
 	}
 
 	attributeChangedCallback(attribute, oldVal, newVal){
-		log()('[SoftKeyboard] attributeChangedCallback', attribute, oldVal, newVal);
-
 		if(attribute === 'layout') this.setLayout(newVal);
 
 		else if(attribute === 'hidden') this[newVal ? 'hide' : 'show']();
@@ -225,3 +223,5 @@ class SoftKeyboard extends HTMLElement {
 }
 
 window.customElements.define('soft-keyboard', SoftKeyboard);
+
+if(typeof module === 'object') module.exports = SoftKeyboard;
